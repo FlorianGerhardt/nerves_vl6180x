@@ -4,14 +4,13 @@ defmodule VL6180X.MixProject do
   def project do
     [
       app: :nerves_vl6180x,
-      version: "0.3.0",
+      version: "0.4.0",
       elixir: "~> 1.10",
       build_embedded: Mix.env() == :prod,
       start_permanent: Mix.env() == :prod,
       description: description(),
       package: package(),
       deps: deps(),
-      name: "VL6180X",
       source_url: "https://github.com/OleMchls/nerves_vl6180x"
     ]
   end
@@ -24,7 +23,7 @@ defmodule VL6180X.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:circuits_i2c, "~> 0.1"},
+      {:circuits_i2c, "~> 1.0.1"},
       {:ex_doc, "~> 0.14", only: :dev, runtime: false},
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false}
     ]
