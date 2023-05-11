@@ -2,7 +2,7 @@ defmodule VL6180X do
   @moduledoc """
   A library to interface with the VL6180X time-of-flight laser sensor.
   """
-  use Bitwise
+  import Bitwise
 
   alias Circuits.I2C
 
