@@ -13,6 +13,7 @@ defmodule VL6180X do
   @vl6180x_reg_system_interrupt_clear 0x015
   @vl6180x_reg_system_fresh_out_of_reset 0x016
   @vl6180x_reg_sysrange_start 0x018
+  @vl6180x_reg_sysrange_max_convergence_time 0x01c
   @vl6180x_reg_sysals_start 0x038
   @vl6180x_reg_sysals_analogue_gain 0x03F
   @vl6180x_reg_sysals_integration_period_hi 0x040
@@ -121,6 +122,8 @@ defmodule VL6180X do
     write8(bus, device, 0x001B, 0x09)  # Set default ranging inter-measurement period to 100ms
     write8(bus, device, 0x003E, 0x31)  # Set default ALS inter-measurement period to 500ms
     write8(bus, device, 0x0014, 0x24)  # Configures interrupt on 'New Sample Ready threshold event'
+
+    write8(bus, device, @vl6180x_reg_sysrange_max_convergence_time, 50)
 
     write8(bus, device, @vl6180x_reg_system_fresh_out_of_reset, 0x00)
   end
