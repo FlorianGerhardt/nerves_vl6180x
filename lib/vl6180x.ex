@@ -14,6 +14,8 @@ defmodule VL6180X do
   @vl6180x_reg_system_fresh_out_of_reset 0x016
   @vl6180x_reg_sysrange_start 0x018
   @vl6180x_reg_sysrange_max_convergence_time 0x01c
+  @vl6180x_reg_sysrange_tresh_high 0x019
+  @vl6180x_reg_sysrange_tresh_low 0x01A
   @vl6180x_reg_sysals_start 0x038
   @vl6180x_reg_sysals_analogue_gain 0x03F
   @vl6180x_reg_sysals_integration_period_hi 0x040
@@ -123,9 +125,16 @@ defmodule VL6180X do
     write8(bus, device, 0x003E, 0x31)  # Set default ALS inter-measurement period to 500ms
     write8(bus, device, 0x0014, 0x24)  # Configures interrupt on 'New Sample Ready threshold event'
 
+    write8(bus, device, @vl6180x_reg_sysrange_tresh_low, 5) # Set raw thresholds
+    write8(bus, device, @vl6180x_reg_sysrange_tresh_high, 200)
+
     write8(bus, device, @vl6180x_reg_sysrange_max_convergence_time, 50)
 
     write8(bus, device, @vl6180x_reg_system_fresh_out_of_reset, 0x00)
+  end
+
+  def clear_interrupt(%__MODULE__{} = ref) do
+    write8(ref.bus, ref.device, @vl6180x_reg_system_interrupt_clear, 0x07)
   end
 
   @doc """
@@ -135,18 +144,10 @@ defmodule VL6180X do
   The sensors operation range is between 5mm and 100mm, in practice, with good
   you can get further distances.
 
-  This call is blocking until the sensor finishes the reading. This usually is
-  prettry fast when no error occurs.
-
   Returns the distance as a positive integer.
   """
   @spec range(t()) :: pos_integer()
   def range(%__MODULE__{} = ref) do
-    # wait for device to be ready for range measurement
-    read8_until(ref.bus, ref.device, @vl6180x_reg_result_range_status, fn
-      << _::7, 0x1::1 >> -> true
-      _ -> false
-    end)
     # Start a range measurement
     write8(ref.bus, ref.device, @vl6180x_reg_sysrange_start, 0x01)
     # Poll until bit 2 is set
