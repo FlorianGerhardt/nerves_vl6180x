@@ -13,7 +13,7 @@ defmodule VL6180X do
   @vl6180x_reg_system_interrupt_clear 0x015
   @vl6180x_reg_system_fresh_out_of_reset 0x016
   @vl6180x_reg_sysrange_start 0x018
-  @vl6180x_reg_sysrange_max_convergence_time 0x01c
+  @vl6180x_reg_sysrange_max_convergence_time 0x01C
   @vl6180x_reg_sysrange_tresh_high 0x019
   @vl6180x_reg_sysrange_tresh_low 0x01A
   @vl6180x_reg_sysals_start 0x038
@@ -67,7 +67,10 @@ defmodule VL6180X do
   @spec open(binary(), I2C.address()) :: {:ok, t()}
   def open(bus_name, address \\ @vl6180x_default_i2c_addr) do
     {:ok, ref} = I2C.open(bus_name)
-    {:ok, << @vl6180x_device_model_identification_number >>} = read8(ref, address, @vl6180x_reg_identification_model_id)
+
+    {:ok, <<@vl6180x_device_model_identification_number>>} =
+      read8(ref, address, @vl6180x_reg_identification_model_id)
+
     {:ok, %__MODULE__{bus: ref, device: address}}
   end
 
@@ -113,19 +116,30 @@ defmodule VL6180X do
     write8(bus, device, 0x0030, 0x00)
 
     # Recommended : Public registers - See data sheet for more detail
-    write8(bus, device, 0x0011, 0x10)  # Enables polling for 'New Sample ready' when measurement completes
-    write8(bus, device, 0x010A, 0x30)  # Set the averaging sample period  (compromise between lower noise and increased execution time)
-    write8(bus, device, 0x003F, 0x46)  # Sets the light and dark gain (upper nibble). Dark gain should not be changed.
-    write8(bus, device, 0x0031, 0xFF)  # sets the # of range measurements after which auto calibration of system is performed
-    write8(bus, device, 0x0040, 0x63)  # Set ALS integration time to 100ms
-    write8(bus, device, 0x002E, 0x01)  # perform a single temperature calibration of the ranging sensor
+    # Enables polling for 'New Sample ready' when measurement completes
+    write8(bus, device, 0x0011, 0x10)
+
+    # Set the averaging sample period  (compromise between lower noise and increased execution time)
+    write8(bus, device, 0x010A, 0x30)
+    # Sets the light and dark gain (upper nibble). Dark gain should not be changed.
+    write8(bus, device, 0x003F, 0x46)
+    # sets the # of range measurements after which auto calibration of system is performed
+    write8(bus, device, 0x0031, 0xFF)
+    # Set ALS integration time to 100ms
+    write8(bus, device, 0x0040, 0x63)
+    # perform a single temperature calibration of the ranging sensor
+    write8(bus, device, 0x002E, 0x01)
 
     # Optional: Public registers - See data sheet for more detail
-    write8(bus, device, 0x001B, 0x09)  # Set default ranging inter-measurement period to 100ms
-    write8(bus, device, 0x003E, 0x31)  # Set default ALS inter-measurement period to 500ms
-    write8(bus, device, 0x0014, 0x24)  # Configures interrupt on 'New Sample Ready threshold event'
+    # Set default ranging inter-measurement period to 100ms
+    write8(bus, device, 0x001B, 0x09)
+    # Set default ALS inter-measurement period to 500ms
+    write8(bus, device, 0x003E, 0x31)
+    # Configures interrupt on 'New Sample Ready threshold event'
+    write8(bus, device, 0x0014, 0x24)
 
-    write8(bus, device, @vl6180x_reg_sysrange_tresh_low, 5) # Set raw thresholds
+    # Set raw thresholds
+    write8(bus, device, @vl6180x_reg_sysrange_tresh_low, 5)
     write8(bus, device, @vl6180x_reg_sysrange_tresh_high, 200)
 
     write8(bus, device, @vl6180x_reg_sysrange_max_convergence_time, 50)
@@ -135,6 +149,17 @@ defmodule VL6180X do
 
   def clear_interrupt(%__MODULE__{} = ref) do
     write8(ref.bus, ref.device, @vl6180x_reg_system_interrupt_clear, 0x07)
+  end
+
+  def get_result_interrupt_status(%__MODULE__{} = ref, retry \\ 0) do
+    unless retry === 3 do
+      case read8(ref.bus, ref.device, @vl6180x_reg_result_interrupt_status_gpio) do
+        <<_::2, _::3, 0x4::3>> -> true
+        _ -> get_result_interrupt_status(ref, retry + 1)
+      end
+    else
+      false
+    end
   end
 
   @doc """
@@ -150,11 +175,6 @@ defmodule VL6180X do
   def range(%__MODULE__{} = ref) do
     # Start a range measurement
     write8(ref.bus, ref.device, @vl6180x_reg_sysrange_start, 0x01)
-    # Poll until bit 2 is set
-    read8_until(ref.bus, ref.device, @vl6180x_reg_result_interrupt_status_gpio, fn
-      << _::2, _::3, 0x4::3 >> -> true
-      _ -> false
-    end)
     # read range in mm
     {:ok, << range >>} = read8(ref.bus, ref.device, @vl6180x_reg_result_range_val)
     # clear interrupt
@@ -176,8 +196,8 @@ defmodule VL6180X do
     |> determine_range_status
   end
 
-  defp determine_range_status({:ok, << 0::4, _::4 >>}), do: {:ok, :no_error}
-  defp determine_range_status({:ok, << code::4, _::4 >>}), do: {:ok, @range_states[code]}
+  defp determine_range_status({:ok, <<0::4, _::4>>}), do: {:ok, :no_error}
+  defp determine_range_status({:ok, <<code::4, _::4>>}), do: {:ok, @range_states[code]}
   defp determine_range_status(return), do: return
 
   @doc """
@@ -236,10 +256,13 @@ defmodule VL6180X do
   @spec lux(t(), gain()) :: {:ok, float()}
   def lux(%__MODULE__{}, gain) when gain > @als_gain_40, do: {:error, :gain_too_high}
   def lux(%__MODULE__{}, gain) when gain < 0x00, do: {:error, :gain_must_be_positive}
+
   def lux(%__MODULE__{} = ref, gain) do
     # IRQ on ALS ready
-    {:ok, << reserved::2, _als_int_mode::3, range_int_mode::3 >>} = read8(ref.bus, ref.device, @vl6180x_reg_system_interrupt_config)
-    << reg >> = << reserved::2, 0x4::3, range_int_mode::3 >>
+    {:ok, <<reserved::2, _als_int_mode::3, range_int_mode::3>>} =
+      read8(ref.bus, ref.device, @vl6180x_reg_system_interrupt_config)
+
+    <<reg>> = <<reserved::2, 0x4::3, range_int_mode::3>>
     write8(ref.bus, ref.device, @vl6180x_reg_system_interrupt_config, reg)
     # 100 ms integration period
     write8(ref.bus, ref.device, @vl6180x_reg_sysals_integration_period_hi, 100)
@@ -251,34 +274,38 @@ defmodule VL6180X do
     write8(ref.bus, ref.device, @vl6180x_reg_sysals_start, 0x1)
     # Poll until "New Sample Ready threshold event" is set
     read8_until(ref.bus, ref.device, @vl6180x_reg_result_interrupt_status_gpio, fn
-      << _::2, 0x4::3, _::3 >> -> true
+      <<_::2, 0x4::3, _::3>> -> true
       _ -> false
     end)
+
     # read lux!
-    {:ok, << lux::16 >>} = read16(ref.bus, ref.device, @vl6180x_reg_result_als_val)
+    {:ok, <<lux::16>>} = read16(ref.bus, ref.device, @vl6180x_reg_result_als_val)
     # clear interrupt
     write8(ref.bus, ref.device, @vl6180x_reg_system_interrupt_clear, 0x07)
-    lux = lux * 0.32  # calibrated count/lux
-    lux = case gain do
-      @als_gain_1 -> lux / 1
-      @als_gain_1_25 -> lux / 1.25
-      @als_gain_1_67 -> lux / 1.67
-      @als_gain_2_5 -> lux / 2.5
-      @als_gain_5 -> lux / 5
-      @als_gain_10 -> lux / 10
-      @als_gain_20 -> lux / 20
-      @als_gain_40 -> lux / 40
-    end
+    # calibrated count/lux
+    lux = lux * 0.32
+
+    lux =
+      case gain do
+        @als_gain_1 -> lux / 1
+        @als_gain_1_25 -> lux / 1.25
+        @als_gain_1_67 -> lux / 1.67
+        @als_gain_2_5 -> lux / 2.5
+        @als_gain_5 -> lux / 5
+        @als_gain_10 -> lux / 10
+        @als_gain_20 -> lux / 20
+        @als_gain_40 -> lux / 40
+      end
 
     {:ok, lux}
   end
 
   defp write8(bus, device, address, data) do
-    I2C.write(bus, device, << (address >>> 8) &&& 0xFF, address &&& 0xFF, data >>)
+    I2C.write(bus, device, <<address >>> 8 &&& 0xFF, address &&& 0xFF, data>>)
   end
 
   defp read8(bus, device, address) do
-    I2C.write_read(bus, device, << (address >>> 8) &&& 0xFF, address &&& 0xFF >>, 1)
+    I2C.write_read(bus, device, <<address >>> 8 &&& 0xFF, address &&& 0xFF>>, 1)
   end
 
   defp read8_until(bus, device, address, until) do
@@ -288,7 +315,6 @@ defmodule VL6180X do
   end
 
   defp read16(bus, device, address) do
-    I2C.write_read(bus, device, << (address >>> 8) &&& 0xFF, address &&& 0xFF >>, 2)
+    I2C.write_read(bus, device, <<address >>> 8 &&& 0xFF, address &&& 0xFF>>, 2)
   end
-
 end
