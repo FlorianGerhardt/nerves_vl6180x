@@ -147,6 +147,13 @@ defmodule VL6180X do
     write8(bus, device, @vl6180x_reg_system_fresh_out_of_reset, 0x00)
   end
 
+  def fresh_out_of_reset?(%__MODULE__{} = ref) do
+    case read8(ref.bus, ref.device, @vl6180x_reg_system_fresh_out_of_reset) do
+      0x01 -> true
+      _ -> false
+    end
+  end
+
   def clear_interrupt(%__MODULE__{} = ref) do
     write8(ref.bus, ref.device, @vl6180x_reg_system_interrupt_clear, 0x07)
   end
